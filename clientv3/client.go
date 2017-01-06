@@ -234,6 +234,7 @@ func (c *Client) dial(endpoint string, dopts ...grpc.DialOption) (*grpc.ClientCo
 	opts := c.dialSetupOpts(endpoint, dopts...)
 	host := getHost(endpoint)
 	if c.Username != "" && c.Password != "" {
+		fmt.Println("In normal auth")
 		// use dial options without dopts to avoid reusing the client balancer
 		auth, err := newAuthenticator(host, c.dialSetupOpts(endpoint))
 		if err != nil {
@@ -246,6 +247,24 @@ func (c *Client) dial(endpoint string, dopts ...grpc.DialOption) (*grpc.ClientCo
 			return nil, err
 		}
 		opts = append(opts, grpc.WithPerRPCCredentials(authTokenCredential{token: resp.Token}))
+	} else if c.creds != nil {
+		fmt.Println("In cert auth")
+		// If no credentials, try to perform cert based auth
+		auth, err := newAuthenticator(host, c.dialSetupOpts(endpoint))
+		if err != nil {
+			return nil, err
+		}
+		defer auth.close()
+
+		resp, err := auth.authenticate(c.ctx, "", "")
+		if err == nil {
+			fmt.Println("success")
+			if len(resp.Token) > 0 {
+				opts = append(opts, grpc.WithPerRPCCredentials(authTokenCredential{token: resp.Token}))
+			}
+		} else {
+			return nil, err
+		}
 	}
 
 	// add metrics options

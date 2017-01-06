@@ -17,6 +17,7 @@ package etcdserver
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"io"
 	"strconv"
 	"strings"
@@ -33,7 +34,9 @@ import (
 
 	"github.com/coreos/go-semver/semver"
 	"golang.org/x/net/context"
+	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/peer"
 )
 
 const (
@@ -433,6 +436,12 @@ func (s *EtcdServer) AuthDisable(ctx context.Context, r *pb.AuthDisableRequest) 
 	return result.resp.(*pb.AuthDisableResponse), nil
 }
 
+var (
+	ErrCertAuthFailedPeer     = errors.New("Cert Auth: Failed to get peer from ctx")
+	ErrCertAuthUnkownAuthType = errors.New("Cert Auth: Unknown auth type")
+	ErrCertAuthFailed         = errors.New("Cert Auth: Failed to auth")
+)
+
 func (s *EtcdServer) Authenticate(ctx context.Context, r *pb.AuthenticateRequest) (*pb.AuthenticateResponse, error) {
 	var result *applyResult
 
@@ -441,41 +450,97 @@ func (s *EtcdServer) Authenticate(ctx context.Context, r *pb.AuthenticateRequest
 		return nil, err
 	}
 
-	for {
-		checkedRevision, err := s.AuthStore().CheckPassword(r.Name, r.Password)
-		if err != nil {
-			plog.Errorf("invalid authentication request to user %s was issued", r.Name)
-			return nil, err
+	plog.Warningf("In authentication")
+	if s.Cfg.ClientCertAuthEnabled && len(r.Password) == 0 && len(r.Name) == 0 {
+		plog.Warningf("in cert auth branch")
+		// Do cert authentication with Common Name (CN) for verified certs
+		pr, ok := peer.FromContext(ctx)
+		if !ok {
+			return nil, ErrCertAuthFailedPeer
 		}
 
-		st, err := s.AuthStore().GenSimpleToken()
-		if err != nil {
-			return nil, err
+		plog.Warningf("peer init complete")
+		creds, ok := pr.AuthInfo.(credentials.TLSInfo)
+		if !ok {
+			return nil, ErrCertAuthUnkownAuthType
 		}
 
-		internalReq := &pb.InternalAuthenticateRequest{
-			Name:        r.Name,
-			Password:    r.Password,
-			SimpleToken: st,
+		plog.Warningf("cred cast complete")
+		for _, chains := range creds.State.VerifiedChains {
+			plog.Warningf("looking at chains : %v", chains)
+			for _, chain := range chains {
+				plog.Warningf("auth: found common name %s.\n", chain.Subject.CommonName)
+				plog.Debugf("auth: found common name %s.\n", chain.Subject.CommonName)
+
+				st, err := s.AuthStore().GenSimpleToken()
+				if err != nil {
+					return nil, err
+				}
+
+				internalReq := &pb.InternalAuthenticateRequest{
+					Name:        chain.Subject.CommonName,
+					SimpleToken: st,
+				}
+
+				plog.Warningf("Making authentication request")
+				result, err = s.processInternalRaftRequestOnce(ctx, pb.InternalRaftRequest{Authenticate: internalReq})
+
+				plog.Warningf("Done Making authentication request")
+				if err != nil {
+					return nil, err
+				}
+
+				if result.err == nil {
+					ret := result.resp.(*pb.AuthenticateResponse)
+					return ret, nil
+				} else if result.err == auth.ErrAuthNotEnabled {
+					ret := &pb.AuthenticateResponse{Token: ""}
+					return ret, nil
+				}
+			}
 		}
 
-		result, err = s.processInternalRaftRequestOnce(ctx, pb.InternalRaftRequest{Authenticate: internalReq})
-		if err != nil {
-			return nil, err
-		}
-		if result.err != nil {
-			return nil, result.err
-		}
+		plog.Warningf("Done cert auth, no user found")
+		return nil, ErrCertAuthFailed
 
-		if checkedRevision != s.AuthStore().Revision() {
-			plog.Infof("revision when password checked is obsolete, retrying")
-			continue
-		}
+	} else {
+		// Do normal password authentication
+		for {
+			checkedRevision, err := s.AuthStore().CheckPassword(r.Name, r.Password)
+			if err != nil {
+				plog.Errorf("invalid authentication request to user %s was issued", r.Name)
+				return nil, err
+			}
 
-		break
+			st, err := s.AuthStore().GenSimpleToken()
+			if err != nil {
+				return nil, err
+			}
+
+			internalReq := &pb.InternalAuthenticateRequest{
+				Name:        r.Name,
+				Password:    r.Password,
+				SimpleToken: st,
+			}
+
+			result, err = s.processInternalRaftRequestOnce(ctx, pb.InternalRaftRequest{Authenticate: internalReq})
+			if err != nil {
+				return nil, err
+			}
+			if result.err != nil {
+				return nil, result.err
+			}
+
+			if checkedRevision != s.AuthStore().Revision() {
+				plog.Infof("revision when password checked is obsolete, retrying")
+				continue
+			}
+
+			break
+		}
+		return result.resp.(*pb.AuthenticateResponse), nil
 	}
 
-	return result.resp.(*pb.AuthenticateResponse), nil
 }
 
 func (s *EtcdServer) UserAdd(ctx context.Context, r *pb.AuthUserAddRequest) (*pb.AuthUserAddResponse, error) {
