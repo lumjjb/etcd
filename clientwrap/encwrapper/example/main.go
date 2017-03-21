@@ -2,7 +2,7 @@ package example
 
 import (
 	client "github.com/coreos/etcd/client"
-    "github.com/coreos/etcd/clientwrap/encwrapper/encconfig"
+	"github.com/coreos/etcd/clientwrap/encwrapper/encconfig"
 	"github.com/coreos/etcd/clientwrap/encwrapper/skeysapi"
 	"golang.org/x/net/context"
 	"log"

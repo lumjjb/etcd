@@ -4,8 +4,8 @@ package skeysapiv3
 import (
 	"encoding/base64"
 	etcd "github.com/coreos/etcd/clientv3"
-	mvccpb "github.com/coreos/etcd/mvcc/mvccpb"
 	"github.com/coreos/etcd/clientwrap/encwrapper/encconfig"
+	mvccpb "github.com/coreos/etcd/mvcc/mvccpb"
 	"golang.org/x/net/context"
 )
 
@@ -59,7 +59,7 @@ func NewSecureKeysAPI(k etcd.KV, encConf encconfig.EncConfig) (SecureKV, error) 
 		return &skapi, nil
 	}
 
-    wrapper, unwrapper := GetWrappers(encConf)
+	wrapper, unwrapper := GetWrappers(encConf)
 
 	skapi := secureKV{
 		k:              k,
@@ -69,7 +69,7 @@ func NewSecureKeysAPI(k etcd.KV, encConf encconfig.EncConfig) (SecureKV, error) 
 	return &skapi, nil
 }
 
-func GetWrappers (encConf encconfig.EncConfig) (ValueGetWrapFunc, ValueSetUnwrapFunc) {
+func GetWrappers(encConf encconfig.EncConfig) (ValueGetWrapFunc, ValueSetUnwrapFunc) {
 
 	// Wrapper function will take the message, encrypt it then base64
 	// encode it to ensure that there are no null bytes in the value to store
@@ -103,7 +103,7 @@ func GetWrappers (encConf encconfig.EncConfig) (ValueGetWrapFunc, ValueSetUnwrap
 		return string(plainBytes), nil
 	}
 
-    return wrapper, unwrapper
+	return wrapper, unwrapper
 }
 
 /*** Implement the KeysAPI Interface ***/

@@ -30,7 +30,7 @@ func NewSecureKeysAPI(k etcd.KeysAPI, encConf encconfig.EncConfig) (etcd.KeysAPI
 		return k, nil
 	}
 
-    wrapper, unwrapper := GetWrappers(encConf) 
+	wrapper, unwrapper := GetWrappers(encConf)
 
 	skapi := secureKeysAPI{
 		k:              k,
@@ -40,8 +40,8 @@ func NewSecureKeysAPI(k etcd.KeysAPI, encConf encconfig.EncConfig) (etcd.KeysAPI
 	return &skapi, nil
 }
 
-func GetWrappers (encConf encconfig.EncConfig) (ValueGetWrapFunc, ValueSetUnwrapFunc) {
-    wrapper := func(m string) (string, error) {
+func GetWrappers(encConf encconfig.EncConfig) (ValueGetWrapFunc, ValueSetUnwrapFunc) {
+	wrapper := func(m string) (string, error) {
 		plainBytes := []byte(m)
 		encBytes, wrapErr := encConf.Encrypt(plainBytes)
 		if wrapErr != nil {
@@ -69,10 +69,8 @@ func GetWrappers (encConf encconfig.EncConfig) (ValueGetWrapFunc, ValueSetUnwrap
 		return string(plainBytes), nil
 	}
 
-    return wrapper, unwrapper
+	return wrapper, unwrapper
 }
-
-
 
 /*** Implement the KeysAPI Interface ***/
 
