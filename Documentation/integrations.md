@@ -153,3 +153,4 @@
 - [ryandoyle/nss-etcd](https://github.com/ryandoyle/nss-etcd) - A GNU libc NSS module for resolving names from etcd.
 - [Gru](https://github.com/dnaeon/gru) - Orchestration made easy with Go
 - [Vitess](http://vitess.io/) - Vitess is a database clustering system for horizontal scaling of MySQL.
+- [Skeysapi](https://github.com/lumjjb/etcd/tree/enc_wrapper/clientwrap/encwrapper) - Skeysapi is a encryption wrapper for the etcd Client Keys API/KV.
